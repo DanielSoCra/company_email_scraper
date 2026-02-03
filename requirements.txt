@@ -1,0 +1,30 @@
+# Web Framework
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+python-multipart>=0.0.6
+
+# Database
+sqlmodel>=0.0.14
+alembic>=1.12.0
+psycopg2-binary>=2.9.9
+asyncpg>=0.29.0
+
+# Authentication
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+
+# HTTP Client
+httpx>=0.25.0
+
+# Email
+aiosmtplib>=3.0.0
+
+# Templating
+jinja2>=3.1.2
+
+# Environment
+python-dotenv>=1.0.0
+
+# Scraping (reuse from existing project)
+requests>=2.31.0
+beautifulsoup4>=4.12.0
