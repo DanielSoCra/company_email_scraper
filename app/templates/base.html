@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ title or "Company Email Scraper" }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='style.css') }}" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="container header-inner">
+        <div class="brand">
+          <span class="brand-mark">CES</span>
+          <div class="brand-text">
+            <div class="brand-title">Company Email Scraper</div>
+            <div class="brand-subtitle">Pipeline for lead-ready contacts</div>
+          </div>
+        </div>
+        <nav class="site-nav">
+          <a href="/submit">Submit</a>
+          <a href="/history">History</a>
+          {% if current_user %}
+            <span class="user-pill">{{ current_user }}</span>
+            <a class="ghost" href="/logout">Logout</a>
+          {% else %}
+            <a class="ghost" href="/">Login</a>
+          {% endif %}
+        </nav>
+      </div>
+    </header>
+
+    <main class="container main">
+      {% if flash_message %}
+        <div class="flash flash-{{ flash_type|default('info') }}">
+          {{ flash_message }}
+          {% if flash_job_id %}
+            <a class="flash-link" href="/results/{{ flash_job_id }}">View results</a>
+          {% endif %}
+        </div>
+      {% endif %}
+      {% block content %}{% endblock %}
+    </main>
+
+    <footer class="site-footer">
+      <div class="container">
+        <span>Company Email Scraper</span>
+        <span class="footer-note">Automated discovery • Verified enrichment • CSV export</span>
+      </div>
+    </footer>
+  </body>
+</html>

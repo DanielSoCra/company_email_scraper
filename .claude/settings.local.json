@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(git -C /Users/danieleberl/code/rolf/company_email_scraper status)"
+      "Bash(git -C /Users/danieleberl/code/rolf/company_email_scraper status)",
+      "Bash(gh pr list:*)"
     ]
   }
 }

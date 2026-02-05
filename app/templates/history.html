@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="card">
+  <div class="card-header">
+    <h1>Job history</h1>
+    <p>Track the status of your recent submissions and download results.</p>
+  </div>
+  {% if jobs %}
+    <div class="table-wrapper">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Submitted</th>
+            <th>Location</th>
+            <th>Status</th>
+            <th>Progress</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for job in jobs %}
+            <tr>
+              <td>{{ job.created_at.strftime('%Y-%m-%d %H:%M') if job.created_at else '-' }}</td>
+              <td>{{ job.city }} {{ job.zip_code }}</td>
+              <td><span class="status status-{{ job.status|default('pending') }}">{{ job.status }}</span></td>
+              <td>
+                <div class="progress">
+                  <span>{{ job.stats_emails_found }} emails</span>
+                  <span>{{ job.stats_scraped }} scraped</span>
+                </div>
+              </td>
+              <td>
+                <a class="button" href="/results/{{ job.id }}">Download</a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="empty-state">
+      <h2>No jobs yet</h2>
+      <p>Submit a job to start collecting company contacts.</p>
+      <a class="primary" href="/submit">Create your first job</a>
+    </div>
+  {% endif %}
+</section>
+{% endblock %}

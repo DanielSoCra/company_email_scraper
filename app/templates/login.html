@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="card">
+  <div class="card-header">
+    <h1>Sign in</h1>
+    <p>Use your assigned credentials to submit and track scraping jobs.</p>
+  </div>
+  <form class="form" method="post" action="/login{% if next_path %}?next={{ next_path }}{% endif %}">
+    <label class="field">
+      <span>Email</span>
+      <input type="email" name="email" autocomplete="email" required />
+    </label>
+    <label class="field">
+      <span>Password</span>
+      <input type="password" name="password" autocomplete="current-password" required />
+    </label>
+    <button class="primary" type="submit">Continue</button>
+  </form>
+</section>
+
+<section class="card muted">
+  <h2>What happens next</h2>
+  <ul class="list">
+    <li>Submit a location and ZIP code to start a new discovery job.</li>
+    <li>Track progress and download results from the history page.</li>
+    <li>Duplicate submissions will be detected to prevent overlap.</li>
+  </ul>
+</section>
+{% endblock %}

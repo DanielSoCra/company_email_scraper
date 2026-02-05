@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="card">
+  <div class="card-header">
+    <h1>Submit a scraping job</h1>
+    <p>Define the target location and we will orchestrate scraping, filtering, and enrichment.</p>
+  </div>
+  <form class="form" method="post" action="/scrape">
+    <div class="grid">
+      <label class="field">
+        <span>City</span>
+        <input type="text" name="city" placeholder="Austin" required />
+      </label>
+      <label class="field">
+        <span>ZIP code</span>
+        <input type="text" name="zip_code" placeholder="78701" required />
+      </label>
+    </div>
+    <div class="form-actions">
+      <button class="primary" type="submit">Start job</button>
+      <span class="helper">We will alert you once results are ready.</span>
+    </div>
+  </form>
+</section>
+
+<section class="card muted">
+  <h2>How we process your request</h2>
+  <div class="steps">
+    <div>
+      <h3>1. Scrape</h3>
+      <p>Gather businesses from target directories.</p>
+    </div>
+    <div>
+      <h3>2. Filter</h3>
+      <p>Remove irrelevant entries with AI classification.</p>
+    </div>
+    <div>
+      <h3>3. Enrich</h3>
+      <p>Find verified emails and package a CSV export.</p>
+    </div>
+  </div>
+</section>
+{% endblock %}

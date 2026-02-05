@@ -1,9 +1,14 @@
+import logging
 import os
 from dataclasses import dataclass, field
 
 from dotenv import load_dotenv
 
 load_dotenv()
+logger = logging.getLogger(__name__)
+
+CLAUDE_BATCH_SIZE_MIN = 50
+CLAUDE_BATCH_SIZE_MAX = 100
 
 
 def _parse_users(users_str: str) -> dict[str, str]:
@@ -18,6 +23,22 @@ def _parse_users(users_str: str) -> dict[str, str]:
         email, password = pair.split(":", 1)
         users[email.strip()] = password.strip()
     return users
+
+
+def _parse_bool(value: str, default: bool = False) -> bool:
+    if value is None or value == "":
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _clamp_int(value: int, minimum: int, maximum: int, setting_name: str) -> int:
+    if value < minimum:
+        logger.warning("%s below minimum (%d); clamping to %d", setting_name, minimum, minimum)
+        return minimum
+    if value > maximum:
+        logger.warning("%s above maximum (%d); clamping to %d", setting_name, maximum, maximum)
+        return maximum
+    return value
 
 
 @dataclass
@@ -42,7 +63,11 @@ class DatabaseConfig:
 @dataclass
 class APIConfig:
     manus_api_key: str = ""
+    manus_api_url: str = "https://api.manus.ai/v1"
     anthropic_api_key: str = ""
+    claude_model: str = "claude-3-haiku-20240307"
+    claude_batch_size: int = 75
+    claude_max_retries: int = 3
 
 
 @dataclass
@@ -52,15 +77,20 @@ class EmailConfig:
     smtp_user: str = "apikey"
     smtp_password: str = ""
     from_email: str = "noreply@yourapp.com"
+    enabled: bool = True
 
 
 @dataclass
 class AppConfig:
     base_url: str = "http://localhost:8000"
+    port: int = 8000
     manus_rate_limit: int = 5
     manus_webhook_url: str = "http://localhost:8000/webhooks/manus"
+    manus_polling_interval: int = 30
     job_timeout_hours: int = 12
     stream_batch_size: int = 100
+    cookie_secure: bool = True
+    cookie_samesite: str = "lax"
 
 
 @dataclass
@@ -82,6 +112,25 @@ class Settings:
         if not jwt_secret:
             raise ValueError("JWT_SECRET_KEY environment variable is required")
 
+        anthropic_api_key = os.getenv("ANTHROPIC_API_KEY", "")
+        if not anthropic_api_key:
+            logger.warning(
+                "ANTHROPIC_API_KEY is not set; Claude filtering will use fallback only."
+            )
+
+        manus_api_key = os.getenv("MANUS_API_KEY", "")
+        if not manus_api_key:
+            raise ValueError("MANUS_API_KEY environment variable is required")
+
+        # Email configuration validation
+        email_enabled = _parse_bool(os.getenv("EMAIL_ENABLED", ""), default=True)
+        smtp_password = os.getenv("SMTP_PASSWORD", "")
+        if email_enabled and not smtp_password:
+            logger.warning(
+                "SMTP_PASSWORD is not set; email notifications will fail. "
+                "Set EMAIL_ENABLED=false to disable emails in development."
+            )
+
         return cls(
             auth=AuthConfig(
                 jwt_secret_key=jwt_secret,
@@ -90,24 +139,40 @@ class Settings:
             ),
             database=DatabaseConfig(url=database_url),
             api=APIConfig(
-                manus_api_key=os.getenv("MANUS_API_KEY", ""),
-                anthropic_api_key=os.getenv("ANTHROPIC_API_KEY", ""),
+                manus_api_key=manus_api_key,
+                manus_api_url=os.getenv("MANUS_API_URL", "https://api.manus.ai/v1"),
+                anthropic_api_key=anthropic_api_key,
+                claude_model=os.getenv("CLAUDE_MODEL", "claude-3-haiku-20240307"),
+                claude_batch_size=_clamp_int(
+                    int(os.getenv("CLAUDE_BATCH_SIZE", "75")),
+                    CLAUDE_BATCH_SIZE_MIN,
+                    CLAUDE_BATCH_SIZE_MAX,
+                    "CLAUDE_BATCH_SIZE",
+                ),
+                claude_max_retries=int(os.getenv("CLAUDE_MAX_RETRIES", "3")),
             ),
             email=EmailConfig(
                 smtp_host=os.getenv("SMTP_HOST", "smtp.sendgrid.net"),
                 smtp_port=int(os.getenv("SMTP_PORT", "587")),
                 smtp_user=os.getenv("SMTP_USER", "apikey"),
-                smtp_password=os.getenv("SMTP_PASSWORD", ""),
+                smtp_password=smtp_password,
                 from_email=os.getenv("FROM_EMAIL", "noreply@yourapp.com"),
+                enabled=email_enabled,
             ),
             app=AppConfig(
                 base_url=os.getenv("BASE_URL", "http://localhost:8000"),
+                port=int(os.getenv("PORT", "8000")),
                 manus_rate_limit=int(os.getenv("MANUS_RATE_LIMIT", "5")),
                 manus_webhook_url=os.getenv(
                     "MANUS_WEBHOOK_URL", "http://localhost:8000/webhooks/manus"
                 ),
+                manus_polling_interval=int(os.getenv("MANUS_POLLING_INTERVAL", "30")),
                 job_timeout_hours=int(os.getenv("JOB_TIMEOUT_HOURS", "12")),
                 stream_batch_size=int(os.getenv("STREAM_BATCH_SIZE", "100")),
+                cookie_secure=_parse_bool(
+                    os.getenv("COOKIE_SECURE", ""), default=True
+                ),
+                cookie_samesite=os.getenv("COOKIE_SAMESITE", "lax"),
             ),
         )
 
