@@ -64,9 +64,8 @@ class StadtbranchenbuchScraper:
         headers = {"User-Agent": self._get_random_user_agent()}
 
         try:
-            response = self.session.head(url, headers=headers, timeout=10, allow_redirects=True)
-            if response.status_code == 405:
-                response = self.session.get(url, headers=headers, timeout=10)
+            # Use GET directly - HEAD returns 404 on this website
+            response = self.session.get(url, headers=headers, timeout=10)
             is_valid = response.status_code == 200
         except requests.RequestException:
             logger.exception(
@@ -106,32 +105,64 @@ class StadtbranchenbuchScraper:
             Company dictionaries matching the Company model fields.
         """
         normalized_city = self._normalize_city_name(city)
-        url = f"{self.BASE_URL.format(city=normalized_city)}{self.SEARCH_PATH}"
+        base_url = self.BASE_URL.format(city=normalized_city)
 
-        logger.info("Starting scrape for city=%s zip=%s url=%s", city, zip_code, url)
+        logger.info("Starting scrape for city=%s zip=%s", city, zip_code)
         processed = 0
-        for company in self._scrape_page(url, normalized_city):
-            processed += 1
-            logger.info(
-                "Yielding company %d: %s",
-                processed,
-                company.get("name", ""),
-            )
-            yield company
+        page = 1
+        max_pages = 50  # Safety limit
+
+        while page <= max_pages:
+            # Page 1: firmenverzeichnis.html, Page 2+: firmenverzeichnis_N.html
+            if page == 1:
+                url = f"{base_url}/F/firmenverzeichnis.html"
+            else:
+                url = f"{base_url}/F/firmenverzeichnis_{page}.html"
+
+            logger.info("Scraping page %d: %s", page, url)
+            page_count = 0
+
+            for company in self._scrape_page(url, normalized_city, is_first_page=(page == 1)):
+                processed += 1
+                page_count += 1
+                logger.info(
+                    "Yielding company %d: %s",
+                    processed,
+                    company.get("name", ""),
+                )
+                yield company
+
+            # Stop if no companies found on this page
+            if page_count == 0:
+                logger.info("No companies found on page %d, stopping pagination", page)
+                break
+
+            page += 1
+
+        logger.info("Completed scraping city=%s, total companies=%d", city, processed)
 
     @staticmethod
     def _normalize_city_name(city: str) -> str:
         """Normalize city name to URL format.
 
         Args:
-            city: City name (e.g., "Bad Boll", "bad boll").
+            city: City name (e.g., "Bad Boll", "bad boll", "Köln").
 
         Returns:
-            Normalized city name (e.g., "bad-boll").
+            Normalized city name (e.g., "bad-boll", "koeln").
         """
         normalized = city.lower().strip()
-        normalized = re.sub(r"\s+", "-", normalized)
-        normalized = re.sub(r"[^a-z0-9\-]", "", normalized)
+        # Convert German umlauts
+        normalized = normalized.replace("ä", "ae")
+        normalized = normalized.replace("ö", "oe")
+        normalized = normalized.replace("ü", "ue")
+        normalized = normalized.replace("ß", "ss")
+        # Replace spaces/hyphens with single hyphen
+        normalized = re.sub(r"[\s-]+", "-", normalized)
+        # Remove any remaining special characters
+        normalized = re.sub(r"[^a-z0-9-]", "", normalized)
+        # Remove leading/trailing hyphens
+        normalized = normalized.strip("-")
         return normalized
 
     def _make_request_with_retry(self, url: str, max_retries: int = 3) -> requests.Response:
@@ -217,21 +248,40 @@ class StadtbranchenbuchScraper:
         logger.debug("Applying rate limit delay of %.2f seconds", delay)
         time.sleep(delay)
 
-    def _scrape_page(self, url: str, city: str) -> Iterator[Dict[str, Any]]:
+    def _scrape_page(
+        self, url: str, city: str, is_first_page: bool = True
+    ) -> Iterator[Dict[str, Any]]:
         """Scrape company listings from a page and stream companies.
 
         Args:
             url: URL to scrape.
             city: City name for logging context.
+            is_first_page: If True, use retry logic. If False, 503/404 means end of pagination.
 
         Yields:
-            Company dictionaries.
+            Company dictionaries. Empty if page doesn't exist.
         """
-        try:
-            response = self._make_request_with_retry(url)
-        except requests.RequestException:
-            logger.exception("Error fetching listings for city=%s url=%s", city, url)
-            raise
+        if is_first_page:
+            # First page uses retry logic
+            try:
+                response = self._make_request_with_retry(url)
+            except requests.RequestException:
+                logger.exception("Error fetching listings for city=%s url=%s", city, url)
+                raise
+        else:
+            # Pagination pages: 503/404 means no more pages
+            headers = {"User-Agent": self._get_random_user_agent()}
+            try:
+                response = self.session.get(url, headers=headers, timeout=30)
+            except requests.RequestException:
+                logger.exception("Error fetching listings for city=%s url=%s", city, url)
+                raise
+
+            if response.status_code in (404, 503):
+                logger.info("Page returned %s (no more pages) for url=%s", response.status_code, url)
+                return
+
+            response.raise_for_status()
 
         soup = BeautifulSoup(response.content, "html.parser")
         try:
@@ -248,11 +298,8 @@ class StadtbranchenbuchScraper:
         Yields:
             Company data dictionaries.
         """
-        company_elements = soup.find_all("div", class_=re.compile(r"entry|listing|company"))
-
-        if not company_elements:
-            all_divs = soup.find_all("div")
-            company_elements = [div for div in all_divs if div.find("h3") and div.find("address")]
+        # Stadtbranchenbuch uses serp-listing class for company entries
+        company_elements = soup.find_all("div", class_="serp-listing")
 
         logger.info("Found %d company entries", len(company_elements))
 
@@ -271,6 +318,7 @@ class StadtbranchenbuchScraper:
             Dictionary with company data or None if parsing fails.
         """
         try:
+            # h3 can be in div.address (premium) or div.image (regular)
             name_elem = element.find("h3")
             if not name_elem:
                 return None
@@ -293,25 +341,30 @@ class StadtbranchenbuchScraper:
                 "filtered_out": False,
             }
 
-            address_elem = element.find("address")
-            if address_elem:
-                self._extract_address_data(address_elem, company)
+            # Extract detail URL from the link wrapping h3
+            detail_link = name_elem.find_parent("a")
+            if detail_link and detail_link.get("href"):
+                company["detail_url"] = detail_link["href"]
 
+            # Extract address data from div.address > address
+            address_div = element.find("div", class_="address")
+            if address_div:
+                address_elem = address_div.find("address")
+                if address_elem:
+                    self._extract_address_data(address_elem, company)
+
+            # Extract category from infos div
             infos_div = element.find("div", class_="infos")
             if infos_div:
                 company["category"] = self._extract_category(infos_div, company["city"])
 
-            homepage_link = element.find("a", string=re.compile(r"Homepage", re.IGNORECASE))
-            if homepage_link and homepage_link.get("href"):
-                company["website"] = homepage_link["href"]
+            # Look for homepage link with data-follow-link (actual URL) or href
+            homepage_link = element.find("a", class_="homepage")
+            if homepage_link:
+                # Prefer data-follow-link as it contains the actual destination
+                company["website"] = homepage_link.get("data-follow-link") or homepage_link.get("href", "")
 
-            detail_link = element.find("a", href=re.compile(r"/\d+\.html"))
-            if detail_link and detail_link.get("href"):
-                company["detail_url"] = urljoin(
-                    "https://stadtbranchenbuch.com",
-                    detail_link["href"],
-                )
-
+            # Build full address string
             if company["street"] and company["postal_code"] and company["city"]:
                 company["address"] = (
                     f"{company['street']}, {company['postal_code']} {company['city']}"

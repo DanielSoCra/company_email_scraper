@@ -12,6 +12,8 @@ from fastapi.templating import Jinja2Templates
 from .auth import get_current_user, get_optional_user
 from .config import get_settings
 from .database import check_db_health
+from .debug_logs import install_debug_handler, get_recent_logs, DEBUG_UI_ENABLED
+import app.debug_logs as debug_logs_module
 from .exceptions import (
     AuthenticationError,
     ExpiredTokenError,
@@ -21,12 +23,15 @@ from .exceptions import (
 )
 from .routes.auth import router as auth_router
 from .routes.web import router as web_router
-from .services.claude_filter_service import close_claude_http_client
+from .services.gemini_filter_service import close_gemini_http_client
 from .services.job_processor import monitor_job_timeouts, resume_incomplete_jobs
 from .services.manus_service import close_manus_http_client
 from .task_registry import wait_for_active_jobs
 
 logger = logging.getLogger(__name__)
+
+# Install debug log handler immediately
+install_debug_handler()
 
 # Global reference to timeout monitor task for graceful shutdown
 _timeout_monitor_task: asyncio.Task | None = None
@@ -79,7 +84,7 @@ async def lifespan(app: FastAPI):
         logger.info("Job timeout monitor stopped")
 
     # Close HTTP clients
-    await close_claude_http_client()
+    await close_gemini_http_client()
     await close_manus_http_client()
     logger.info("HTTP clients closed")
 
@@ -130,3 +135,28 @@ async def health_check():
 @app.get("/protected-example")
 async def protected_example(current_user: str = Depends(get_current_user)):
     return {"user": current_user}
+
+
+@app.get("/api/debug/logs")
+async def get_debug_logs(since: int = 0):
+    """Get recent log entries for debug UI.
+
+    Args:
+        since: Only return logs after this index (for polling).
+
+    Returns:
+        JSON with logs array and current index.
+    """
+    logs, current_index = get_recent_logs(since)
+    return {
+        "enabled": debug_logs_module.DEBUG_UI_ENABLED,
+        "logs": logs,
+        "index": current_index,
+    }
+
+
+@app.post("/api/debug/toggle")
+async def toggle_debug_logs(enabled: bool = True):
+    """Toggle debug log capture on/off."""
+    debug_logs_module.DEBUG_UI_ENABLED = enabled
+    return {"enabled": debug_logs_module.DEBUG_UI_ENABLED}

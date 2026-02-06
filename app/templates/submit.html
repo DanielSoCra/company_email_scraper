@@ -6,23 +6,49 @@
     <h1>Submit a scraping job</h1>
     <p>Define the target location and we will orchestrate scraping, filtering, and enrichment.</p>
   </div>
-  <form class="form" method="post" action="/scrape">
+  <form class="form" method="post" action="/scrape" id="submit-form">
     <div class="grid">
       <label class="field">
         <span>City</span>
-        <input type="text" name="city" placeholder="Austin" required />
+        <input type="text" name="city" placeholder="Austin" value="{{ prefill_city or '' }}" required />
       </label>
       <label class="field">
         <span>ZIP code</span>
-        <input type="text" name="zip_code" placeholder="78701" required />
+        <input type="text" name="zip_code" placeholder="78701" value="{{ prefill_zip or '' }}" required />
       </label>
     </div>
+    {% if show_retry_confirm %}
+    <input type="hidden" name="force" value="true" />
     <div class="form-actions">
-      <button class="primary" type="submit">Start job</button>
+      <button class="primary submit-btn" type="submit">
+        <span class="btn-text">Retry job</span>
+        <span class="btn-spinner"></span>
+      </button>
+      <span class="helper">This will create a new job for the same location.</span>
+    </div>
+    {% else %}
+    <div class="form-actions">
+      <button class="primary submit-btn" type="submit">
+        <span class="btn-text">Start job</span>
+        <span class="btn-spinner"></span>
+      </button>
       <span class="helper">We will alert you once results are ready.</span>
     </div>
+    {% endif %}
   </form>
 </section>
+
+<script>
+(function() {
+  var form = document.getElementById('submit-form');
+  var btn = form.querySelector('.submit-btn');
+
+  form.addEventListener('submit', function() {
+    btn.classList.add('loading');
+    btn.disabled = true;
+  });
+})();
+</script>
 
 <section class="card muted">
   <h2>How we process your request</h2>

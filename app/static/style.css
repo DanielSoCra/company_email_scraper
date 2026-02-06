@@ -203,6 +203,44 @@ button.primary:hover,
   background: var(--accent-dark);
 }
 
+.submit-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 120px;
+}
+
+.btn-spinner {
+  display: none;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.submit-btn.loading .btn-text {
+  visibility: hidden;
+}
+
+.submit-btn.loading .btn-spinner {
+  display: block;
+  position: absolute;
+}
+
+.submit-btn.loading {
+  pointer-events: none;
+  opacity: 0.8;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .helper {
   font-size: 13px;
   color: var(--muted);
@@ -248,6 +286,12 @@ button.primary:hover,
   background: #f0f4ff;
   border-color: #cdd7ff;
   color: #2b3a6f;
+}
+
+.flash-warning {
+  background: #fffbeb;
+  border-color: #fde68a;
+  color: var(--warning);
 }
 
 .flash-success {
@@ -304,6 +348,17 @@ button.primary:hover,
   color: var(--warning);
 }
 
+.status-running {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.status-failed,
+.status-timeout {
+  background: #fef2f2;
+  color: var(--error);
+}
+
 .status-completed {
   background: #ecfdf3;
   color: var(--success);
@@ -319,6 +374,89 @@ button.primary:hover,
 .empty-state {
   text-align: center;
   padding: 32px 16px;
+}
+
+.actions-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.delete-form {
+  margin: 0;
+}
+
+.delete-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.delete-btn:hover {
+  background: #fef2f2;
+  border-color: #fecdc9;
+  color: var(--error);
+}
+
+.button.disabled {
+  background: #e5e5e5;
+  color: #a3a3a3;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.refresh-controls {
+  margin-top: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+
+.refresh-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: #f5f5f5;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.refresh-button:hover {
+  background: #e8e8e8;
+}
+
+.refresh-button svg {
+  flex-shrink: 0;
+}
+
+.auto-refresh-text {
+  font-size: 13px;
+  color: #0369a1;
+  background: #f0f9ff;
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid #bae6fd;
+}
+
+#countdown {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .site-footer {
@@ -354,4 +492,506 @@ button.primary:hover,
     flex-direction: column;
     align-items: flex-start;
   }
+}
+
+/* Job Detail Page */
+
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.breadcrumb a {
+  color: var(--accent);
+}
+
+.breadcrumb a:hover {
+  text-decoration: underline;
+}
+
+.breadcrumb-sep {
+  color: var(--border);
+}
+
+.section-title {
+  margin: 0 0 16px;
+  font-size: 18px;
+}
+
+.detail-meta {
+  display: flex;
+  gap: 24px;
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+
+.meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 14px;
+}
+
+.meta-label {
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+/* Phase Timeline */
+
+.phase-timeline {
+  display: grid;
+  gap: 0;
+}
+
+.phase-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 0;
+  border-left: 2px solid var(--border);
+  padding-left: 20px;
+  position: relative;
+}
+
+.phase-step:first-child {
+  padding-top: 0;
+}
+
+.phase-step:last-child {
+  padding-bottom: 0;
+  border-left-color: transparent;
+}
+
+.phase-indicator {
+  position: absolute;
+  left: -6px;
+  top: 12px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--border);
+  border: 2px solid var(--panel);
+}
+
+.phase-step:first-child .phase-indicator {
+  top: 0;
+}
+
+.phase-indicator-completed {
+  background: var(--success);
+}
+
+.phase-indicator-running {
+  background: #0369a1;
+  box-shadow: 0 0 0 3px rgba(3, 105, 161, 0.2);
+}
+
+.phase-indicator-failed {
+  background: var(--error);
+}
+
+.phase-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 14px;
+}
+
+.phase-duration {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.phase-time {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* Funnel */
+
+.funnel {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.funnel-step {
+  flex: 1;
+  min-width: 70px;
+  text-align: center;
+}
+
+.funnel-value {
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.funnel-value-highlight {
+  color: var(--accent);
+}
+
+.funnel-label {
+  font-size: 12px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-top: 2px;
+}
+
+.funnel-sub {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+.funnel-sub-error {
+  color: var(--error);
+}
+
+.funnel-arrow {
+  color: var(--border);
+  font-size: 20px;
+  padding-top: 6px;
+  flex-shrink: 0;
+}
+
+/* Company Filters */
+
+.company-filters {
+  margin-bottom: 16px;
+}
+
+.filter-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.filter-field input,
+.filter-field select {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-family: inherit;
+  background: white;
+}
+
+.filter-field select {
+  min-width: 140px;
+}
+
+.filter-field input {
+  min-width: 160px;
+}
+
+.filter-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.filter-btn {
+  padding: 8px 16px !important;
+  font-size: 13px !important;
+}
+
+.filter-reset {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.filter-reset:hover {
+  color: var(--ink);
+  text-decoration: underline;
+}
+
+/* Company table extras */
+
+.company-website {
+  font-size: 11px;
+  color: var(--accent);
+  word-break: break-all;
+}
+
+.company-website:hover {
+  text-decoration: underline;
+}
+
+.classification-reason {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.email-found {
+  color: var(--success);
+  font-weight: 500;
+  word-break: break-all;
+}
+
+.error-detail {
+  font-size: 12px;
+  color: var(--error);
+  word-break: break-word;
+}
+
+.error-time {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.retry-badge {
+  display: inline-block;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #fef3c7;
+  color: var(--warning);
+  margin-top: 2px;
+}
+
+.retry-form {
+  margin: 4px 0 0;
+}
+
+.retry-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: #f0f7f6;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.retry-btn:hover {
+  background: var(--accent);
+  color: white;
+}
+
+/* Pagination */
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 16px;
+  font-size: 14px;
+}
+
+.page-link {
+  padding: 6px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  color: var(--accent);
+  font-weight: 500;
+  transition: background 0.15s ease;
+}
+
+.page-link:hover:not(.disabled) {
+  background: rgba(15, 118, 110, 0.06);
+}
+
+.page-link.disabled {
+  color: #ccc;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.page-info {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* History page job links */
+
+.job-link {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.job-link:hover {
+  text-decoration: underline;
+}
+
+.detail-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--muted);
+  transition: all 0.15s ease;
+}
+
+.detail-link:hover {
+  background: #f0f7f6;
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+@media (max-width: 720px) {
+  .detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .filter-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .filter-field input,
+  .filter-field select {
+    width: 100%;
+  }
+
+  .funnel {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .funnel-arrow {
+    transform: rotate(90deg);
+    padding: 0;
+  }
+
+  .detail-meta {
+    flex-direction: column;
+    gap: 12px;
+  }
+}
+
+/* Debug Panel */
+.debug-panel {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: #1e1e2e;
+  border-top: 1px solid #313244;
+  font-family: "SF Mono", "Fira Code", monospace;
+  font-size: 12px;
+  z-index: 1000;
+}
+
+.debug-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 16px;
+  background: #181825;
+  cursor: pointer;
+  user-select: none;
+}
+
+.debug-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #cdd6f4;
+  font-weight: 500;
+}
+
+.debug-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #6c7086;
+}
+
+.debug-btn {
+  padding: 4px 8px;
+  background: #313244;
+  border: none;
+  border-radius: 4px;
+  color: #cdd6f4;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.debug-btn:hover {
+  background: #45475a;
+}
+
+.debug-content {
+  height: 200px;
+  overflow: hidden;
+}
+
+#debug-logs {
+  height: 100%;
+  overflow-y: auto;
+  padding: 8px 16px;
+}
+
+.log-entry {
+  display: flex;
+  gap: 12px;
+  padding: 2px 0;
+  color: #a6adc8;
+}
+
+.log-time {
+  color: #6c7086;
+  flex-shrink: 0;
+}
+
+.log-level {
+  width: 56px;
+  flex-shrink: 0;
+  font-weight: 500;
+}
+
+.log-msg {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.log-info .log-level {
+  color: #89b4fa;
+}
+
+.log-warn .log-level,
+.log-warn .log-msg {
+  color: #f9e2af;
+}
+
+.log-error .log-level,
+.log-error .log-msg {
+  color: #f38ba8;
+}
+
+.log-debug .log-level {
+  color: #6c7086;
+}
+
+/* Adjust main content to not be hidden by debug panel */
+body {
+  padding-bottom: 240px;
 }

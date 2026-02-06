@@ -7,8 +7,8 @@ from dotenv import load_dotenv
 load_dotenv()
 logger = logging.getLogger(__name__)
 
-CLAUDE_BATCH_SIZE_MIN = 50
-CLAUDE_BATCH_SIZE_MAX = 100
+AI_BATCH_SIZE_MIN = 10
+AI_BATCH_SIZE_MAX = 40
 
 
 def _parse_users(users_str: str) -> dict[str, str]:
@@ -64,10 +64,10 @@ class DatabaseConfig:
 class APIConfig:
     manus_api_key: str = ""
     manus_api_url: str = "https://api.manus.ai/v1"
-    anthropic_api_key: str = ""
-    claude_model: str = "claude-3-haiku-20240307"
-    claude_batch_size: int = 75
-    claude_max_retries: int = 3
+    gemini_api_key: str = ""
+    gemini_model: str = "gemini-3-flash-preview"
+    ai_batch_size: int = 25
+    ai_max_retries: int = 3
 
 
 @dataclass
@@ -84,6 +84,7 @@ class EmailConfig:
 class AppConfig:
     base_url: str = "http://localhost:8000"
     port: int = 8000
+    dev_mode: bool = False
     manus_rate_limit: int = 5
     manus_webhook_url: str = "http://localhost:8000/webhooks/manus"
     manus_polling_interval: int = 30
@@ -112,10 +113,10 @@ class Settings:
         if not jwt_secret:
             raise ValueError("JWT_SECRET_KEY environment variable is required")
 
-        anthropic_api_key = os.getenv("ANTHROPIC_API_KEY", "")
-        if not anthropic_api_key:
+        gemini_api_key = os.getenv("GEMINI_API_KEY", "")
+        if not gemini_api_key:
             logger.warning(
-                "ANTHROPIC_API_KEY is not set; Claude filtering will use fallback only."
+                "GEMINI_API_KEY is not set; AI filtering will use fallback only."
             )
 
         manus_api_key = os.getenv("MANUS_API_KEY", "")
@@ -141,15 +142,15 @@ class Settings:
             api=APIConfig(
                 manus_api_key=manus_api_key,
                 manus_api_url=os.getenv("MANUS_API_URL", "https://api.manus.ai/v1"),
-                anthropic_api_key=anthropic_api_key,
-                claude_model=os.getenv("CLAUDE_MODEL", "claude-3-haiku-20240307"),
-                claude_batch_size=_clamp_int(
-                    int(os.getenv("CLAUDE_BATCH_SIZE", "75")),
-                    CLAUDE_BATCH_SIZE_MIN,
-                    CLAUDE_BATCH_SIZE_MAX,
-                    "CLAUDE_BATCH_SIZE",
+                gemini_api_key=gemini_api_key,
+                gemini_model=os.getenv("GEMINI_MODEL", "gemini-3-flash-preview"),
+                ai_batch_size=_clamp_int(
+                    int(os.getenv("AI_BATCH_SIZE", "75")),
+                    AI_BATCH_SIZE_MIN,
+                    AI_BATCH_SIZE_MAX,
+                    "AI_BATCH_SIZE",
                 ),
-                claude_max_retries=int(os.getenv("CLAUDE_MAX_RETRIES", "3")),
+                ai_max_retries=int(os.getenv("AI_MAX_RETRIES", "3")),
             ),
             email=EmailConfig(
                 smtp_host=os.getenv("SMTP_HOST", "smtp.sendgrid.net"),
@@ -162,6 +163,7 @@ class Settings:
             app=AppConfig(
                 base_url=os.getenv("BASE_URL", "http://localhost:8000"),
                 port=int(os.getenv("PORT", "8000")),
+                dev_mode=_parse_bool(os.getenv("DEV_MODE", ""), default=False),
                 manus_rate_limit=int(os.getenv("MANUS_RATE_LIMIT", "5")),
                 manus_webhook_url=os.getenv(
                     "MANUS_WEBHOOK_URL", "http://localhost:8000/webhooks/manus"

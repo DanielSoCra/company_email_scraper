@@ -14,6 +14,7 @@
             <th>Submitted</th>
             <th>Location</th>
             <th>Status</th>
+            <th>Phase</th>
             <th>Progress</th>
             <th>Actions</th>
           </tr>
@@ -22,22 +23,70 @@
           {% for job in jobs %}
             <tr>
               <td>{{ job.created_at.strftime('%Y-%m-%d %H:%M') if job.created_at else '-' }}</td>
-              <td>{{ job.city }} {{ job.zip_code }}</td>
+              <td><a class="job-link" href="/jobs/{{ job.id }}">{{ job.city }} {{ job.zip_code }}</a></td>
               <td><span class="status status-{{ job.status|default('pending') }}">{{ job.status }}</span></td>
+              <td>{{ job.current_phase or '-' }}</td>
               <td>
                 <div class="progress">
-                  <span>{{ job.stats_emails_found }} emails</span>
                   <span>{{ job.stats_scraped }} scraped</span>
+                  <span>{{ job.stats_filtered_valid }} valid</span>
+                  <span>{{ job.stats_emails_found }} emails</span>
                 </div>
               </td>
-              <td>
-                <a class="button" href="/results/{{ job.id }}">Download</a>
+              <td class="actions-cell">
+                <a class="detail-link" href="/jobs/{{ job.id }}" title="View details">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+                  </svg>
+                </a>
+                {% if job.status == 'completed' %}
+                  <a class="button" href="/results/{{ job.id }}">Download</a>
+                {% else %}
+                  <span class="button disabled">Download</span>
+                {% endif %}
+                <form method="post" action="/jobs/{{ job.id }}/delete" class="delete-form" onsubmit="return confirm('Delete this job and all its data?')">
+                  <button type="submit" class="delete-btn" title="Delete job">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+                    </svg>
+                  </button>
+                </form>
               </td>
             </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
+
+    {% set has_active_jobs = jobs | selectattr('status', 'in', ['pending', 'running']) | list | length > 0 %}
+    <div class="refresh-controls">
+      <button class="refresh-button" onclick="window.location.reload()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M23 4v6h-6M1 20v-6h6"/>
+          <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+        </svg>
+        Refresh
+      </button>
+      {% if has_active_jobs %}
+        <span class="auto-refresh-text">Auto-refresh in <span id="countdown">10</span>s</span>
+      {% endif %}
+    </div>
+    {% if has_active_jobs %}
+      <script>
+        (function() {
+          var seconds = 10;
+          var countdownEl = document.getElementById('countdown');
+          var interval = setInterval(function() {
+            seconds--;
+            if (countdownEl) countdownEl.textContent = seconds;
+            if (seconds <= 0) {
+              clearInterval(interval);
+              window.location.reload();
+            }
+          }, 1000);
+        })();
+      </script>
+    {% endif %}
   {% else %}
     <div class="empty-state">
       <h2>No jobs yet</h2>

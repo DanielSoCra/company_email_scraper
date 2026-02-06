@@ -33,8 +33,10 @@
       {% if flash_message %}
         <div class="flash flash-{{ flash_type|default('info') }}">
           {{ flash_message }}
-          {% if flash_job_id %}
-            <a class="flash-link" href="/results/{{ flash_job_id }}">View results</a>
+          {% if flash_job_id and flash_type == 'success' %}
+            <a class="flash-link" href="/history">View history</a>
+          {% elif flash_job_id and flash_type in ['info', 'warning'] %}
+            <a class="flash-link" href="/history">View job</a>
           {% endif %}
         </div>
       {% endif %}
@@ -47,5 +49,108 @@
         <span class="footer-note">Automated discovery • Verified enrichment • CSV export</span>
       </div>
     </footer>
+
+    <!-- Debug Log Panel -->
+    <div id="debug-panel" class="debug-panel">
+      <div class="debug-header" onclick="toggleDebugPanel()">
+        <span class="debug-title">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+          </svg>
+          Server Logs
+        </span>
+        <span class="debug-controls">
+          <button class="debug-btn" onclick="event.stopPropagation(); clearDebugLogs()">Clear</button>
+          <button class="debug-btn" onclick="event.stopPropagation(); toggleDebugEnabled()">
+            <span id="debug-toggle-text">Pause</span>
+          </button>
+          <span id="debug-expand-icon">▼</span>
+        </span>
+      </div>
+      <div id="debug-content" class="debug-content">
+        <div id="debug-logs"></div>
+      </div>
+    </div>
+
+    <script>
+    (function() {
+      var logIndex = 0;
+      var expanded = true;
+      var enabled = true;
+      var logsEl = document.getElementById('debug-logs');
+      var contentEl = document.getElementById('debug-content');
+      var expandIcon = document.getElementById('debug-expand-icon');
+      var toggleText = document.getElementById('debug-toggle-text');
+
+      window.toggleDebugPanel = function() {
+        expanded = !expanded;
+        contentEl.style.display = expanded ? 'block' : 'none';
+        expandIcon.textContent = expanded ? '▼' : '▲';
+      };
+
+      window.clearDebugLogs = function() {
+        logsEl.textContent = '';
+      };
+
+      window.toggleDebugEnabled = function() {
+        enabled = !enabled;
+        toggleText.textContent = enabled ? 'Pause' : 'Resume';
+        fetch('/api/debug/toggle?enabled=' + enabled, { method: 'POST' });
+      };
+
+      function levelClass(level) {
+        if (level === 'ERROR') return 'log-error';
+        if (level === 'WARNING') return 'log-warn';
+        if (level === 'DEBUG') return 'log-debug';
+        return 'log-info';
+      }
+
+      function fetchLogs() {
+        if (!enabled) {
+          setTimeout(fetchLogs, 1000);
+          return;
+        }
+        fetch('/api/debug/logs?since=' + logIndex)
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            logIndex = data.index;
+            data.logs.forEach(function(log) {
+              var div = document.createElement('div');
+              div.className = 'log-entry ' + levelClass(log.level);
+
+              var timeSpan = document.createElement('span');
+              timeSpan.className = 'log-time';
+              timeSpan.textContent = log.timestamp.split('T')[1].split('.')[0];
+
+              var levelSpan = document.createElement('span');
+              levelSpan.className = 'log-level';
+              levelSpan.textContent = log.level;
+
+              var msgSpan = document.createElement('span');
+              msgSpan.className = 'log-msg';
+              msgSpan.textContent = log.message;
+
+              div.appendChild(timeSpan);
+              div.appendChild(levelSpan);
+              div.appendChild(msgSpan);
+              logsEl.appendChild(div);
+            });
+            if (data.logs.length > 0) {
+              logsEl.scrollTop = logsEl.scrollHeight;
+            }
+            // Keep only last 200 entries in DOM
+            while (logsEl.children.length > 200) {
+              logsEl.removeChild(logsEl.firstChild);
+            }
+          })
+          .catch(function() {})
+          .finally(function() {
+            setTimeout(fetchLogs, 1000);
+          });
+      }
+
+      fetchLogs();
+    })();
+    </script>
   </body>
 </html>

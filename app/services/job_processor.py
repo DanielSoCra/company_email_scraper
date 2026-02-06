@@ -18,7 +18,7 @@ from sqlmodel import select
 
 from ..database import get_session_factory
 from ..models import Company, Job, ManusTask
-from .claude_filter_service import create_claude_filter
+from .gemini_filter_service import create_ai_filter
 from .email_service import send_completion_email, send_failure_email, send_timeout_email
 from .manus_service import (
     create_tasks_streaming,
@@ -446,7 +446,7 @@ async def _run_filtering_phase(job_id: str, session) -> bool:
     logger.info("Starting filtering phase for job %s", job_id)
     await update_job_phase(job_id, "filtering", "running", session, start=True)
 
-    filter_service = create_claude_filter()
+    filter_service = create_ai_filter()
     total_processed = 0
 
     try:

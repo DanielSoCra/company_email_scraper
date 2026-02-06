@@ -14,15 +14,16 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import PlainTextResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
-from sqlmodel import select
+from sqlmodel import func, select
 
 from ..auth import get_current_user, get_optional_user
+from ..config import get_settings
 from ..database import get_session
 from ..task_registry import register_job_task
-from ..models import Job
+from ..models import Company, Job
 from ..services.csv_service import generate_csv
 from ..services.job_processor import process_job
-from ..services.manus_service import handle_task_completion
+from ..services.manus_service import handle_task_completion, retry_company_visible
 from ..services.scraper_service import StadtbranchenbuchScraper
 
 templates = Jinja2Templates(directory=Path(__file__).parent.parent / "templates")
@@ -76,9 +77,15 @@ def _flash_from_query(request: Request) -> dict[str, str | None]:
     elif error_code == "duplicate":
         flash_type = "info"
         flash_message = "A job with the same location is already in progress."
+    elif error_code == "failed_exists":
+        flash_type = "warning"
+        flash_message = "A previous job for this location failed. Submit again to retry."
     elif success_code == "job_created":
         flash_type = "success"
         flash_message = "Job submitted. We will start processing shortly."
+    elif success_code == "job_deleted":
+        flash_type = "success"
+        flash_message = "Job deleted successfully."
     elif info_code == "logged_in":
         flash_type = "info"
         flash_message = "You are already signed in."
@@ -120,12 +127,20 @@ async def submit_page(
     current_user: str = Depends(get_current_user),
 ):
     flash = _flash_from_query(request)
+    params = request.query_params
+    # Pass city/zip for retry confirmation
+    prefill_city = params.get("city", "")
+    prefill_zip = params.get("zip_code", "")
+    show_retry_confirm = params.get("error") == "failed_exists"
     return templates.TemplateResponse(
         "submit.html",
         {
             "request": request,
             "title": "Submit Job · Company Email Scraper",
             "current_user": current_user,
+            "prefill_city": prefill_city,
+            "prefill_zip": prefill_zip,
+            "show_retry_confirm": show_retry_confirm,
             **flash,
         },
     )
@@ -136,11 +151,13 @@ async def submit_job(
     request: Request,
     city: str = Form(...),
     zip_code: str = Form(...),
+    force: str = Form(""),
     current_user: str = Depends(get_current_user),
     session=Depends(get_session),
 ):
     normalized_city = city.strip()
     normalized_zip = zip_code.strip()
+    force_retry = force.strip().lower() == "true"
 
     if not normalized_city or not normalized_zip:
         return RedirectResponse(url="/submit?error=missing_fields", status_code=303)
@@ -155,6 +172,7 @@ async def submit_job(
         )
         return RedirectResponse(url="/submit?error=city_not_found", status_code=303)
 
+    # Check for existing incomplete jobs
     duplicate_stmt = (
         select(Job)
         .where(
@@ -168,10 +186,22 @@ async def submit_job(
     existing_job = (await session.execute(duplicate_stmt)).scalars().first()
 
     if existing_job:
-        return RedirectResponse(
-            url=f"/submit?error=duplicate&job_id={existing_job.id}",
-            status_code=303,
-        )
+        # Check if it's actively running or failed/timeout
+        if existing_job.status in ("pending", "running"):
+            # Truly in progress - block submission
+            return RedirectResponse(
+                url=f"/submit?error=duplicate&job_id={existing_job.id}",
+                status_code=303,
+            )
+        elif existing_job.status in ("failed", "timeout"):
+            # Failed job - allow retry with confirmation
+            if not force_retry:
+                from urllib.parse import quote
+                return RedirectResponse(
+                    url=f"/submit?error=failed_exists&job_id={existing_job.id}&city={quote(normalized_city)}&zip_code={quote(normalized_zip)}",
+                    status_code=303,
+                )
+            # User confirmed retry - continue to create new job
 
     job_id = uuid4().hex
     job = Job(
@@ -220,6 +250,139 @@ async def history_page(
     )
 
 
+def _escape_like(value: str) -> str:
+    """Escape special characters for SQL LIKE patterns."""
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+PAGE_SIZE = 50
+
+
+@router.get("/jobs/{job_id}")
+async def job_detail_page(
+    request: Request,
+    job_id: str,
+    page: int = 1,
+    classification: str = "",
+    enrichment: str = "",
+    has_email: str = "",
+    has_error: str = "",
+    search: str = "",
+    current_user: str = Depends(get_current_user),
+    session=Depends(get_session),
+):
+    job = await session.get(Job, job_id)
+    if not job or job.user_email != current_user:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    # Build filtered company query
+    query = select(Company).where(Company.job_id == job_id)
+    count_query = select(func.count(Company.id)).where(Company.job_id == job_id)
+
+    if classification:
+        query = query.where(Company.ai_classification == classification)
+        count_query = count_query.where(Company.ai_classification == classification)
+
+    if enrichment:
+        query = query.where(Company.enrichment_status == enrichment)
+        count_query = count_query.where(Company.enrichment_status == enrichment)
+
+    if has_email == "yes":
+        query = query.where(Company.email.isnot(None))
+        count_query = count_query.where(Company.email.isnot(None))
+    elif has_email == "no":
+        query = query.where(Company.email.is_(None))
+        count_query = count_query.where(Company.email.is_(None))
+
+    if has_error == "yes":
+        query = query.where(Company.last_error.isnot(None))
+        count_query = count_query.where(Company.last_error.isnot(None))
+
+    if search.strip():
+        pattern = f"%{_escape_like(search.strip())}%"
+        query = query.where(Company.name.ilike(pattern))
+        count_query = count_query.where(Company.name.ilike(pattern))
+
+    total = (await session.execute(count_query)).scalar() or 0
+    total_pages = max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE)
+    page = max(1, min(page, total_pages))
+    offset = (page - 1) * PAGE_SIZE
+
+    companies = (
+        (await session.execute(query.order_by(Company.name).offset(offset).limit(PAGE_SIZE)))
+        .scalars()
+        .all()
+    )
+
+    # Build phase timeline
+    phases = []
+    for phase_name in ("scraping", "filtering", "enriching", "exporting"):
+        phases.append({
+            "name": phase_name.capitalize(),
+            "status": getattr(job, f"{phase_name}_status", None),
+            "started_at": getattr(job, f"{phase_name}_started_at", None),
+            "completed_at": getattr(job, f"{phase_name}_completed_at", None),
+            "duration_seconds": getattr(job, f"{phase_name}_duration_seconds", None),
+        })
+
+    # Build filter state for template (preserves current filters on pagination)
+    filters = {
+        "classification": classification,
+        "enrichment": enrichment,
+        "has_email": has_email,
+        "has_error": has_error,
+        "search": search,
+    }
+
+    settings = get_settings()
+    return templates.TemplateResponse(
+        "job_detail.html",
+        {
+            "request": request,
+            "title": f"Job Detail · {job.city} {job.zip_code}",
+            "current_user": current_user,
+            "job": job,
+            "phases": phases,
+            "companies": companies,
+            "page": page,
+            "total_pages": total_pages,
+            "total": total,
+            "filters": filters,
+            "dev_mode": settings.app.dev_mode,
+        },
+    )
+
+
+@router.post("/jobs/{job_id}/retry/{company_id}")
+async def retry_company(
+    job_id: str,
+    company_id: str,
+    current_user: str = Depends(get_current_user),
+    session=Depends(get_session),
+):
+    """Retry Manus enrichment for a single company with visible task (dev only)."""
+    settings = get_settings()
+    if not settings.app.dev_mode:
+        raise HTTPException(status_code=403, detail="Dev mode is not enabled")
+
+    job = await session.get(Job, job_id)
+    if not job or job.user_email != current_user:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    company = await session.get(Company, company_id)
+    if not company or company.job_id != job_id:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    try:
+        task_id = await retry_company_visible(company_id, session)
+        logger.info("Dev retry: created visible Manus task %s for company %s", task_id, company_id)
+    except Exception as exc:
+        logger.error("Dev retry failed for company %s: %s", company_id, exc)
+        raise HTTPException(status_code=500, detail=str(exc))
+
+    return RedirectResponse(url=f"/jobs/{job_id}", status_code=303)
+
+
 @router.get("/results/{job_id}")
 async def download_results(
     job_id: str,
@@ -248,6 +411,42 @@ async def download_results(
         media_type="text/csv",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.post("/jobs/{job_id}/delete")
+async def delete_job(
+    job_id: str,
+    current_user: str = Depends(get_current_user),
+    session=Depends(get_session),
+):
+    """Delete a job and all its associated data."""
+    from ..models import Company, ManusTask
+
+    job = await session.get(Job, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    if job.user_email != current_user:
+        raise HTTPException(status_code=403, detail="Not authorized to delete this job")
+
+    # Delete associated companies
+    companies_stmt = select(Company).where(Company.job_id == job_id)
+    companies = (await session.execute(companies_stmt)).scalars().all()
+    for company in companies:
+        await session.delete(company)
+
+    # Delete associated Manus tasks
+    tasks_stmt = select(ManusTask).where(ManusTask.job_id == job_id)
+    tasks = (await session.execute(tasks_stmt)).scalars().all()
+    for task in tasks:
+        await session.delete(task)
+
+    # Delete the job
+    await session.delete(job)
+    await session.commit()
+
+    logger.info("Deleted job %s and associated data", job_id)
+    return RedirectResponse(url="/history?success=job_deleted", status_code=303)
 
 
 @router.post("/webhooks/manus")

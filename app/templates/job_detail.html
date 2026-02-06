@@ -1,0 +1,278 @@
+{% extends "base.html" %}
+
+{% block content %}
+{# Breadcrumb #}
+<nav class="breadcrumb">
+  <a href="/history">History</a>
+  <span class="breadcrumb-sep">/</span>
+  <span>{{ job.city }} {{ job.zip_code }}</span>
+</nav>
+
+{# Job Summary Card #}
+<section class="card">
+  <div class="card-header">
+    <h1>{{ job.city }} {{ job.zip_code }} <span class="status status-{{ job.status|default('pending') }}">{{ job.status }}</span></h1>
+  </div>
+  <div class="detail-meta">
+    <div class="meta-item">
+      <span class="meta-label">Created</span>
+      <span>{{ job.created_at.strftime('%Y-%m-%d %H:%M') if job.created_at else '-' }}</span>
+    </div>
+    <div class="meta-item">
+      <span class="meta-label">Started</span>
+      <span>{{ job.started_at.strftime('%Y-%m-%d %H:%M') if job.started_at else '-' }}</span>
+    </div>
+    <div class="meta-item">
+      <span class="meta-label">Completed</span>
+      <span>{{ job.completed_at.strftime('%Y-%m-%d %H:%M') if job.completed_at else '-' }}</span>
+    </div>
+  </div>
+</section>
+
+{# Phase Timeline + Funnel Stats #}
+<div class="detail-grid">
+  <section class="card">
+    <h2 class="section-title">Pipeline Phases</h2>
+    <div class="phase-timeline">
+      {% for phase in phases %}
+        <div class="phase-step">
+          <div class="phase-indicator phase-indicator-{{ phase.status or 'pending' }}"></div>
+          <div class="phase-info">
+            <strong>{{ phase.name }}</strong>
+            {% if phase.status %}
+              <span class="status status-{{ phase.status }}">{{ phase.status }}</span>
+            {% else %}
+              <span class="status">pending</span>
+            {% endif %}
+            {% if phase.duration_seconds is not none %}
+              <span class="phase-duration">{{ phase.duration_seconds }}s</span>
+            {% endif %}
+            {% if phase.started_at %}
+              <span class="phase-time">{{ phase.started_at.strftime('%H:%M:%S') }}</span>
+            {% endif %}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="card">
+    <h2 class="section-title">Funnel</h2>
+    <div class="funnel">
+      <div class="funnel-step">
+        <div class="funnel-value">{{ job.stats_scraped }}</div>
+        <div class="funnel-label">Scraped</div>
+      </div>
+      <div class="funnel-arrow">&#8594;</div>
+      <div class="funnel-step">
+        <div class="funnel-value">{{ job.stats_filtered_valid }}</div>
+        <div class="funnel-label">Valid B2B</div>
+        {% if job.stats_filtered_excluded %}
+          <div class="funnel-sub">{{ job.stats_filtered_excluded }} excluded</div>
+        {% endif %}
+      </div>
+      <div class="funnel-arrow">&#8594;</div>
+      <div class="funnel-step">
+        <div class="funnel-value">{{ job.stats_enrichment_completed }}</div>
+        <div class="funnel-label">Enriched</div>
+        {% if job.stats_enrichment_failed %}
+          <div class="funnel-sub funnel-sub-error">{{ job.stats_enrichment_failed }} failed</div>
+        {% endif %}
+        {% if job.stats_enrichment_pending %}
+          <div class="funnel-sub">{{ job.stats_enrichment_pending }} pending</div>
+        {% endif %}
+      </div>
+      <div class="funnel-arrow">&#8594;</div>
+      <div class="funnel-step">
+        <div class="funnel-value funnel-value-highlight">{{ job.stats_emails_found }}</div>
+        <div class="funnel-label">Emails Found</div>
+      </div>
+    </div>
+  </section>
+</div>
+
+{# Job Errors #}
+{% if job.errors %}
+<section class="card">
+  <h2 class="section-title">Errors ({{ job.errors|length }})</h2>
+  <div class="table-wrapper">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Phase</th>
+          <th>Type</th>
+          <th>Message</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for err in job.errors %}
+          <tr>
+            <td>{{ err.get('timestamp', '-') if err is mapping else '-' }}</td>
+            <td>{{ err.get('phase', '-') if err is mapping else '-' }}</td>
+            <td>{{ err.get('type', '-') if err is mapping else '-' }}</td>
+            <td class="error-detail">{{ err.get('message', err) if err is mapping else err }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+{# Company Table with Filters #}
+<section class="card">
+  <h2 class="section-title">Companies ({{ total }})</h2>
+
+  <form class="company-filters" method="get" action="/jobs/{{ job.id }}">
+    <div class="filter-row">
+      <div class="filter-field">
+        <input type="text" name="search" value="{{ filters.search }}" placeholder="Search company name...">
+      </div>
+      <div class="filter-field">
+        <select name="classification">
+          <option value="">All classifications</option>
+          <option value="valid_b2b" {{ 'selected' if filters.classification == 'valid_b2b' }}>Valid B2B</option>
+          <option value="exclude" {{ 'selected' if filters.classification == 'exclude' }}>Exclude</option>
+          <option value="not_b2b" {{ 'selected' if filters.classification == 'not_b2b' }}>Not B2B</option>
+          <option value="unclear" {{ 'selected' if filters.classification == 'unclear' }}>Unclear</option>
+        </select>
+      </div>
+      <div class="filter-field">
+        <select name="enrichment">
+          <option value="">All enrichment</option>
+          <option value="completed" {{ 'selected' if filters.enrichment == 'completed' }}>Completed</option>
+          <option value="failed" {{ 'selected' if filters.enrichment == 'failed' }}>Failed</option>
+          <option value="pending" {{ 'selected' if filters.enrichment == 'pending' }}>Pending</option>
+        </select>
+      </div>
+      <div class="filter-field">
+        <select name="has_email">
+          <option value="">Email: any</option>
+          <option value="yes" {{ 'selected' if filters.has_email == 'yes' }}>Has email</option>
+          <option value="no" {{ 'selected' if filters.has_email == 'no' }}>No email</option>
+        </select>
+      </div>
+      <div class="filter-field">
+        <select name="has_error">
+          <option value="">Errors: any</option>
+          <option value="yes" {{ 'selected' if filters.has_error == 'yes' }}>Has error</option>
+        </select>
+      </div>
+      <div class="filter-actions">
+        <button type="submit" class="primary filter-btn">Filter</button>
+        <a href="/jobs/{{ job.id }}" class="filter-reset">Reset</a>
+      </div>
+    </div>
+  </form>
+
+  {% if companies %}
+    <div class="table-wrapper">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Category</th>
+            <th>Classification</th>
+            <th>Enrichment</th>
+            <th>Email</th>
+            <th>Error</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in companies %}
+            <tr>
+              <td>
+                <div>{{ c.name }}</div>
+                {% if c.website %}
+                  <a class="company-website" href="{{ c.website }}" target="_blank" rel="noopener">{{ c.website|truncate(40) }}</a>
+                {% endif %}
+              </td>
+              <td>{{ c.category or '-' }}</td>
+              <td>
+                {% if c.ai_classification %}
+                  <span class="status status-{{ 'completed' if c.ai_classification == 'valid_b2b' else ('failed' if c.ai_classification == 'not_b2b' else 'pending') }}">{{ c.ai_classification }}</span>
+                  {% if c.ai_classification_reason %}
+                    <div class="classification-reason">{{ c.ai_classification_reason|truncate(60) }}</div>
+                  {% endif %}
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+              <td>
+                {% if c.filtered_out %}
+                  <span class="status">Skipped</span>
+                {% else %}
+                  <span class="status status-{{ c.enrichment_status }}">{{ c.enrichment_status }}</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if c.email %}
+                  <span class="email-found">{{ c.email }}</span>
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+              <td>
+                {% if c.last_error %}
+                  <div class="error-detail">{{ c.last_error|truncate(80) }}</div>
+                  {% if c.error_timestamp %}
+                    <div class="error-time">{{ c.error_timestamp.strftime('%H:%M:%S') }}</div>
+                  {% endif %}
+                  {% if c.retry_count > 0 %}
+                    <span class="retry-badge">{{ c.retry_count }} retries</span>
+                  {% endif %}
+                  {% if dev_mode and 'without email' in (c.last_error or '') %}
+                    <form method="post" action="/jobs/{{ job.id }}/retry/{{ c.id }}" class="retry-form">
+                      <button type="submit" class="retry-btn" title="Retry in Manus (visible)">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M23 4v6h-6M1 20v-6h6"/>
+                          <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+                        </svg>
+                        Retry visible
+                      </button>
+                    </form>
+                  {% endif %}
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {# Pagination #}
+    {% if total_pages > 1 %}
+      <div class="pagination">
+        {% if page > 1 %}
+          <a class="page-link" href="/jobs/{{ job.id }}?page={{ page - 1 }}&classification={{ filters.classification }}&enrichment={{ filters.enrichment }}&has_email={{ filters.has_email }}&has_error={{ filters.has_error }}&search={{ filters.search }}">Prev</a>
+        {% else %}
+          <span class="page-link disabled">Prev</span>
+        {% endif %}
+        <span class="page-info">Page {{ page }} of {{ total_pages }}</span>
+        {% if page < total_pages %}
+          <a class="page-link" href="/jobs/{{ job.id }}?page={{ page + 1 }}&classification={{ filters.classification }}&enrichment={{ filters.enrichment }}&has_email={{ filters.has_email }}&has_error={{ filters.has_error }}&search={{ filters.search }}">Next</a>
+        {% else %}
+          <span class="page-link disabled">Next</span>
+        {% endif %}
+      </div>
+    {% endif %}
+  {% else %}
+    <div class="empty-state">
+      <p>No companies match the current filters.</p>
+    </div>
+  {% endif %}
+</section>
+
+{# Auto-refresh for active jobs #}
+{% if job.status in ('pending', 'running') %}
+  <script>
+    (function() {
+      var seconds = 15;
+      setTimeout(function() { window.location.reload(); }, seconds * 1000);
+    })();
+  </script>
+{% endif %}
+{% endblock %}

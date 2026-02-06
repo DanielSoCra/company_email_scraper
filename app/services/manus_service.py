@@ -96,7 +96,22 @@ class ManusClient:
     ) -> dict[str, Any]:
         """Create a new Manus task for a company."""
         await self.rate_limiter.acquire()
+
+        # Build prompt for email discovery
+        company_name = company_data.get("name", "Unknown Company")
+        website = company_data.get("website", "")
+        address = company_data.get("address", "")
+        city = company_data.get("city", "")
+        category = company_data.get("category", "")
+        phone = company_data.get("phone", "")
+        detail_url = company_data.get("detail_url", "")
+
+        prompt = _build_email_search_prompt(
+            company_name, website, address, city, category, phone, detail_url,
+        )
+
         payload = {
+            "prompt": prompt,
             "metadata": metadata,
             "attachment": company_data,
             "hideInTaskList": hide_in_task_list,
@@ -142,7 +157,7 @@ class ManusClient:
             "content-type": "application/json",
         }
 
-        logger.debug("Manus request %s %s payload=%s", method, url, json_payload)
+        logger.info("Manus request %s %s payload=%s", method, url, json_payload)
 
         for attempt in range(len(self.BACKOFF_DELAYS) + 1):
             try:
@@ -191,11 +206,14 @@ class ManusClient:
             try:
                 response.raise_for_status()
             except httpx.HTTPStatusError:
-                logger.exception(
-                    "Non-retryable response status %s for %s %s",
+                # Log the response body to understand what the API is complaining about
+                response_text = response.text if response.content else "(no body)"
+                logger.error(
+                    "Non-retryable response status %s for %s %s - Response: %s",
                     response.status_code,
                     method,
                     url,
+                    response_text[:1000],  # Limit to 1000 chars
                 )
                 raise
 
@@ -225,6 +243,76 @@ def create_manus_client() -> ManusClient:
         api_url=settings.api.manus_api_url,
         rate_limiter=rate_limiter,
     )
+
+
+def _build_email_search_prompt(
+    company_name: str,
+    website: str,
+    address: str,
+    city: str,
+    category: str,
+    phone: str,
+    detail_url: str,
+) -> str:
+    """Build a structured German-language prompt for Manus email discovery.
+
+    Applies prompt engineering best practices:
+    - Clear role and intent context
+    - Structured company data section
+    - Prioritized step-by-step search strategy
+    - Explicit quality criteria (positive framing)
+    - Strict output format specification
+    """
+    # Company data block
+    data_lines = [f"- Firmenname: {company_name}"]
+    if website:
+        data_lines.append(f"- Website: {website}")
+    if address:
+        data_lines.append(f"- Adresse: {address}")
+    if city:
+        data_lines.append(f"- Stadt: {city}")
+    if category:
+        data_lines.append(f"- Branche: {category}")
+    if phone:
+        data_lines.append(f"- Telefon: {phone}")
+    if detail_url:
+        data_lines.append(f"- Branchenbuch-Eintrag: {detail_url}")
+    company_block = "\n".join(data_lines)
+
+    return f"""Du bist ein Recherche-Assistent, der geschäftliche E-Mail-Adressen für deutsche Unternehmen findet. Die E-Mail-Adresse wird für seriöse B2B-Kontaktaufnahme benötigt.
+
+<unternehmensdaten>
+{company_block}
+</unternehmensdaten>
+
+<auftrag>
+Finde eine aktive, allgemeine Geschäfts-E-Mail-Adresse für dieses Unternehmen. Gehe dabei systematisch in der folgenden Reihenfolge vor:
+
+Schritt 1 – Unternehmenswebsite prüfen:
+Öffne die Website des Unternehmens. Suche gezielt nach dem Impressum (in Deutschland gesetzlich vorgeschrieben und enthält fast immer eine E-Mail-Adresse). Prüfe zusätzlich die Kontaktseite und den Footer der Startseite.
+
+Schritt 2 – Google-Suche:
+Falls Schritt 1 keine E-Mail liefert, suche auf Google nach "{company_name} {city} E-Mail Kontakt" oder "{company_name} Impressum".
+
+Schritt 3 – Branchenverzeichnisse:
+Falls weiterhin keine E-Mail gefunden wurde, prüfe Einträge auf gelbeseiten.de, dasoertliche.de und anderen deutschen Branchenverzeichnissen.
+</auftrag>
+
+<qualitaetskriterien>
+Bevorzuge allgemeine Geschäftsadressen in dieser Reihenfolge: info@, kontakt@, office@, mail@, post@.
+Persönliche Adressen (z.B. vorname.nachname@) sind akzeptabel, wenn keine allgemeine Adresse verfügbar ist.
+Die Domain der E-Mail-Adresse sollte zur Unternehmenswebsite passen.
+</qualitaetskriterien>
+
+<ausgabeformat>
+Antworte ausschließlich mit der gefundenen E-Mail-Adresse, ohne zusätzlichen Text.
+
+Beispiel bei Erfolg:
+info@beispiel-firma.de
+
+Falls keine E-Mail gefunden werden konnte, antworte genau mit:
+KEINE_EMAIL_GEFUNDEN
+</ausgabeformat>"""
 
 
 def _build_company_payload(company: Company) -> dict[str, Any]:
@@ -782,6 +870,66 @@ async def resume_enrichment(job_id: str, session) -> dict[str, int]:
         await poll_pending_tasks(job_id)
 
     return {"new_tasks": new_tasks, "resumed_tasks": resumed_tasks}
+
+
+async def retry_company_visible(company_id: str, session) -> str:
+    """Re-run Manus enrichment for a single company with hideInTaskList=False.
+
+    Resets the company enrichment state, creates a new visible Manus task,
+    and kicks off polling. Returns the new Manus task ID.
+    """
+    company = await session.get(Company, company_id)
+    if not company:
+        raise ValueError(f"Company {company_id} not found")
+
+    job = await session.get(Job, company.job_id)
+    if not job:
+        raise ValueError(f"Job {company.job_id} not found")
+
+    # Reset company enrichment state
+    company.enrichment_status = "pending"
+    company.email = None
+    company.email_source = None
+    company.last_error = None
+    company.error_timestamp = None
+
+    # Ensure project exists
+    if not job.manus_project_id:
+        await create_project(job.id, session)
+        await session.refresh(job)
+
+    manus_client = create_manus_client()
+    metadata = {"job_id": job.id, "company_id": company.id}
+
+    task_response = await manus_client.create_task(
+        _build_company_payload(company),
+        metadata,
+        project_id=job.manus_project_id,
+        hide_in_task_list=False,
+    )
+
+    task_id = _extract_task_id(task_response)
+    if not task_id:
+        raise ValueError("Manus task creation returned no task id")
+
+    manus_task = ManusTask(
+        id=task_id,
+        job_id=job.id,
+        company_id=company.id,
+        status="pending",
+    )
+    session.add(manus_task)
+    await session.commit()
+
+    # Start polling for this job so the result gets picked up
+    asyncio.create_task(poll_pending_tasks(job.id))
+
+    logger.info(
+        "Created visible Manus task %s for company %s (debug retry)",
+        task_id,
+        company_id,
+    )
+    return task_id
 
 
 async def cleanup_tasks(job_id: str, session) -> int:
