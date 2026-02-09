@@ -18,7 +18,7 @@ This guide covers deploying the Company Email Scraper to Railway.
 1. In the same project, click "New" → "GitHub Repo"
 2. Select your repository
 3. Set the root directory to `company_email_scraper`
-4. Railway will auto-detect Python and use the Procfile
+4. Railway will build using the project's `Dockerfile` (explicitly set via `railway.json`)
 
 ## Step 3: Configure Environment Variables
 
@@ -29,7 +29,7 @@ Set the following in Railway dashboard (Settings → Variables):
 | `JWT_SECRET_KEY` | Yes | Generate a secure random string (e.g., `openssl rand -hex 32`) |
 | `USERS` | Yes | Format: `email1:password1,email2:password2` |
 | `MANUS_API_KEY` | Yes | Your Manus API key |
-| `ANTHROPIC_API_KEY` | Yes | Your Claude API key |
+| `GEMINI_API_KEY` | Yes | Your Google Gemini API key |
 | `SMTP_PASSWORD` | Yes* | Your SendGrid API key (*if EMAIL_ENABLED=true) |
 | `FROM_EMAIL` | Yes | Your sender email address |
 | `BASE_URL` | Yes | Your Railway app URL (e.g., `https://your-app.up.railway.app`) |
@@ -76,7 +76,7 @@ Set the following in Railway dashboard (Settings → Variables):
 | `JWT_SECRET_KEY` | Yes | - | Secret for JWT token signing |
 | `USERS` | Yes | - | User credentials (email:pass,email:pass) |
 | `MANUS_API_KEY` | Yes | - | Manus API authentication |
-| `ANTHROPIC_API_KEY` | Yes | - | Claude API authentication |
+| `GEMINI_API_KEY` | Yes | - | Gemini API authentication |
 | `SMTP_PASSWORD` | Yes* | - | SendGrid API key (*if EMAIL_ENABLED=true) |
 | `FROM_EMAIL` | Yes | noreply@yourapp.com | Sender email address |
 | `BASE_URL` | Yes | http://localhost:8000 | Application base URL |

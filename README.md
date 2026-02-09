@@ -32,6 +32,18 @@ alembic upgrade head
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
+## Docker Deployment
+
+```bash
+# Build image
+docker build -t company-email-scraper .
+
+# Run container (expects DATABASE_URL and other required vars in .env)
+docker run --rm -p 8000:8000 --env-file .env company-email-scraper
+```
+
+The container startup command runs `alembic upgrade head` before starting the web server.
+
 ## Environment Variables
 
 See `.env.example` for all required configuration. Key variables:
@@ -42,7 +54,7 @@ See `.env.example` for all required configuration. Key variables:
 | `JWT_SECRET_KEY` | Secret for JWT token signing |
 | `USERS` | Comma-separated `email:password` pairs |
 | `MANUS_API_KEY` | API key for Manus email enrichment |
-| `ANTHROPIC_API_KEY` | API key for Claude AI classification |
+| `GEMINI_API_KEY` | API key for Gemini AI classification |
 
 ## Database Migrations
 

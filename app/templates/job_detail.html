@@ -121,8 +121,18 @@
 {% endif %}
 
 {# Company Table with Filters #}
-<section class="card">
-  <h2 class="section-title">Companies ({{ total }})</h2>
+<section class="card" id="companies-card">
+  <div class="section-header">
+    <h2 class="section-title">Companies ({{ total }})</h2>
+    <button class="expand-btn" onclick="toggleFullscreen()" title="Toggle fullscreen" id="expand-btn">
+      <svg id="expand-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/>
+      </svg>
+      <svg id="collapse-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none">
+        <path d="M4 14h6v6m10-10h-6V4m0 6l7-7M3 21l7-7"/>
+      </svg>
+    </button>
+  </div>
 
   <form class="company-filters" method="get" action="/jobs/{{ job.id }}">
     <div class="filter-row">
@@ -173,6 +183,7 @@
           <tr>
             <th>Name</th>
             <th>Category</th>
+            <th>Phone</th>
             <th>Classification</th>
             <th>Enrichment</th>
             <th>Email</th>
@@ -189,6 +200,7 @@
                 {% endif %}
               </td>
               <td>{{ c.category or '-' }}</td>
+              <td>{{ c.phone or '-' }}</td>
               <td>
                 {% if c.ai_classification %}
                   <span class="status status-{{ 'completed' if c.ai_classification == 'valid_b2b' else ('failed' if c.ai_classification == 'not_b2b' else 'pending') }}">{{ c.ai_classification }}</span>
@@ -265,6 +277,31 @@
     </div>
   {% endif %}
 </section>
+
+<script>
+function toggleFullscreen() {
+  var card = document.getElementById('companies-card');
+  var expandIcon = document.getElementById('expand-icon');
+  var collapseIcon = document.getElementById('collapse-icon');
+  card.classList.toggle('fullscreen');
+  var isFullscreen = card.classList.contains('fullscreen');
+  expandIcon.style.display = isFullscreen ? 'none' : '';
+  collapseIcon.style.display = isFullscreen ? '' : 'none';
+  if (isFullscreen) {
+    document.body.style.overflow = 'hidden';
+  } else {
+    document.body.style.overflow = '';
+  }
+}
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    var card = document.getElementById('companies-card');
+    if (card.classList.contains('fullscreen')) {
+      toggleFullscreen();
+    }
+  }
+});
+</script>
 
 {# Auto-refresh for active jobs #}
 {% if job.status in ('pending', 'running') %}

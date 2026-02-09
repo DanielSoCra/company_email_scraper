@@ -291,11 +291,19 @@ Finde eine aktive, allgemeine Geschäfts-E-Mail-Adresse für dieses Unternehmen.
 Schritt 1 – Unternehmenswebsite prüfen:
 Öffne die Website des Unternehmens. Suche gezielt nach dem Impressum (in Deutschland gesetzlich vorgeschrieben und enthält fast immer eine E-Mail-Adresse). Prüfe zusätzlich die Kontaktseite und den Footer der Startseite.
 
-Schritt 2 – Google-Suche:
-Falls Schritt 1 keine E-Mail liefert, suche auf Google nach "{company_name} {city} E-Mail Kontakt" oder "{company_name} Impressum".
+Schritt 2 – Branchenverzeichnisse durchsuchen:
+Falls Schritt 1 keine E-Mail liefert, prüfe die Firmeneinträge auf folgenden Portalen:
+- stadtbranchenbuch.com
+- branchenbuchdeutschland.de
+- dasoertliche.de
+- gelbeseiten.de
+- yelp.de
 
-Schritt 3 – Branchenverzeichnisse:
-Falls weiterhin keine E-Mail gefunden wurde, prüfe Einträge auf gelbeseiten.de, dasoertliche.de und anderen deutschen Branchenverzeichnissen.
+Schritt 3 – Google-Suche mit verschiedenen Suchbegriffen:
+Falls weiterhin keine E-Mail gefunden wurde, führe mehrere Google-Suchen durch:
+- "{company_name} {city} E-Mail Kontakt"
+- "{company_name} Impressum"
+- "{company_name} {city} E-Mail-Adresse"
 </auftrag>
 
 <qualitaetskriterien>
